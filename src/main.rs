@@ -4,12 +4,30 @@ use std::path::PathBuf;
 use clap::Parser;
 
 fn main() {
-    let args = Args::parse();
-    let reader = get_reader(args.path).expect("Failed to create reader");
-    cut(reader, args.fields - 1).expect("Failed to perform cut");
+    let config = Config::build().expect("Failed to create config");
+    cut(config).expect("Failed to perform cut");
 }
 
-fn get_reader(path: Option<PathBuf>) -> std::io::Result<Box<dyn BufRead>> {
+struct Config {
+    fields: usize,
+    delimiter: char,
+    reader: Box<dyn BufRead>
+}
+
+impl Config {
+    fn build() -> std::io::Result<Config> {
+        let args = Args::parse();
+        let reader = build_reader(args.path)?;
+        let delimiter = args.delimiter.unwrap_or_else(|| '\t');
+        Ok(Config {
+            fields: args.fields - 1,
+            delimiter,
+            reader
+        })
+    }
+}
+
+fn build_reader(path: Option<PathBuf>) -> std::io::Result<Box<dyn BufRead>> {
     match path {
         None => {
             Ok(Box::new(BufReader::new(stdin())))
@@ -27,13 +45,13 @@ fn get_reader(path: Option<PathBuf>) -> std::io::Result<Box<dyn BufRead>> {
     }
 }
 
-fn cut(mut reader: Box<dyn BufRead>, fields: usize) -> std::io::Result<()> {
+fn cut(mut config: Config) -> std::io::Result<()> {
     let mut line = String::new();
-    while reader.read_line(&mut line)? > 0 {
-        let split: Vec<&str> = line.split('\t').collect();
+    while config.reader.read_line(&mut line)? > 0 {
+        let split: Vec<&str> = line.split(config.delimiter).collect();
 
-        if fields < split.len() {
-            println!("{}", split[fields]);
+        if config.fields < split.len() {
+            println!("{}", split[config.fields]);
         }
 
         line.clear();
@@ -46,5 +64,7 @@ fn cut(mut reader: Box<dyn BufRead>, fields: usize) -> std::io::Result<()> {
 struct Args {
     #[clap(short='f', long="fields")]
     fields: usize,
+    #[clap(short='d', long="delimiter")]
+    delimiter: Option<char>,
     path: Option<PathBuf>
 }

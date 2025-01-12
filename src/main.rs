@@ -9,7 +9,7 @@ fn main() {
 }
 
 struct Config {
-    fields: usize,
+    fields: Vec<usize>,
     delimiter: char,
     reader: Box<dyn BufRead>
 }
@@ -19,8 +19,26 @@ impl Config {
         let args = Args::parse();
         let reader = build_reader(args.path)?;
         let delimiter = args.delimiter.unwrap_or_else(|| '\t');
+
+        let mut fields: Vec<usize> = vec![];
+        let mut split: Vec<_>;
+
+        if args.fields.contains(',') {
+            split = args.fields.split(',').collect();
+        } else {
+            split = args.fields.split(' ').collect();
+        }
+
+        if split.is_empty() {
+            panic!("Failed to parse the fields argument: {}", args.fields);
+        }
+
+        for split in split {
+            fields.push(split.parse::<usize>().expect("Failed to parse to usize") - 1);
+        }
+
         Ok(Config {
-            fields: args.fields - 1,
+            fields,
             delimiter,
             reader
         })
@@ -49,9 +67,19 @@ fn cut(mut config: Config) -> std::io::Result<()> {
     let mut line = String::new();
     while config.reader.read_line(&mut line)? > 0 {
         let split: Vec<&str> = line.split(config.delimiter).collect();
+        let mut output = String::new();
 
-        if config.fields < split.len() {
-            println!("{}", split[config.fields]);
+        for (index, field) in config.fields.iter().enumerate() {
+            if *field < split.len() {
+                output.push_str(split[*field]);
+            }
+            if index < config.fields.len() - 1 {
+                output.push(config.delimiter);
+            }
+        }
+
+        if output.len() > 0 {
+            println!("{output}");
         }
 
         line.clear();
@@ -63,7 +91,7 @@ fn cut(mut config: Config) -> std::io::Result<()> {
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short='f', long="fields")]
-    fields: usize,
+    fields: String,
     #[clap(short='d', long="delimiter")]
     delimiter: Option<char>,
     path: Option<PathBuf>

@@ -18,16 +18,15 @@ impl Config {
     fn build() -> std::io::Result<Config> {
         let args = Args::parse();
         let reader = build_reader(args.path)?;
-        let delimiter = args.delimiter.unwrap_or_else(|| '\t');
+        let delimiter = args.delimiter.unwrap_or('\t');
 
         let mut fields: Vec<usize> = vec![];
-        let mut split: Vec<_>;
 
-        if args.fields.contains(',') {
-            split = args.fields.split(',').collect();
+        let split: Vec<_> = if args.fields.contains(',') {
+            args.fields.split(',').collect()
         } else {
-            split = args.fields.split(' ').collect();
-        }
+            args.fields.split(' ').collect()
+        };
 
         if split.is_empty() {
             panic!("Failed to parse the fields argument: {}", args.fields);
@@ -51,11 +50,14 @@ fn build_reader(path: Option<PathBuf>) -> std::io::Result<Box<dyn BufRead>> {
             Ok(Box::new(BufReader::new(stdin())))
         }
         Some(path) => {
-            match File::open(path) {
+            match File::open(&path) {
                 Ok(file) => {
                     Ok(Box::new(BufReader::new(file)))
                 }
                 Err(error) => {
+                    if path.to_str() == Some("-") {
+                        return Ok(Box::new(BufReader::new(stdin())));
+                    }
                     Err(error)
                 }
             }
@@ -78,7 +80,7 @@ fn cut(mut config: Config) -> std::io::Result<()> {
             }
         }
 
-        if output.len() > 0 {
+        if !output.is_empty() {
             println!("{output}");
         }
 
